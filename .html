@@ -1,0 +1,2767 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internet Time Machine</title>
+    <style>
+        /* ─── RESET & ROOT ─────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        :root {
+            --bg: #0b1020;
+            --fg: #eaf2ff;
+            --accent: #7cf7ff;
+            --accent2: #ff48b2;
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --card-border: rgba(255, 255, 255, 0.10);
+            --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            --font-size: 1.1rem;
+            --line-height: 1.6;
+            --radius: 18px;
+            --max-w: 1020px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: var(--font);
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+            overflow-x: hidden;
+            transition: background 0.4s ease, color 0.3s ease;
+        }
+
+        /* ─── PARTICLE CANVAS ──────────────────────────────────────── */
+        #particleCanvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        /* ─── PROGRESS BAR ─────────────────────────────────────────── */
+        #progressBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            z-index: 1000;
+            width: 0%;
+            transition: width 0.1s linear;
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        /* ─── TIME METER ───────────────────────────────────────────── */
+        #timeMeter {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 14px 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        #timeMeter .meter-label {
+            font-size: 0.55rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        #yearDisplay {
+            font-size: 1rem;
+            font-weight: 900;
+            color: var(--accent);
+            text-shadow: 0 0 12px var(--accent);
+            letter-spacing: 0.04em;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        /* ─── SIDE NAV ─────────────────────────────────────────────── */
+        .nav {
+            position: fixed;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 8px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.30);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .nav button {
+            appearance: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            font: inherit;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 7px 9px;
+            border-radius: 999px;
+            transition: all 160ms ease;
+            letter-spacing: 0.03em;
+        }
+
+        .nav button:hover {
+            color: var(--fg);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(2px);
+        }
+
+        .nav button.active {
+            color: var(--accent);
+            background: rgba(124, 247, 255, 0.15);
+            border-color: rgba(124, 247, 255, 0.35);
+            text-shadow: 0 0 8px var(--accent);
+        }
+
+        /* ─── ACHIEVEMENT TOAST ────────────────────────────────────── */
+        #achToast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(124, 247, 255, 0.4);
+            border-radius: 999px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: var(--fg);
+            backdrop-filter: blur(12px);
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+            opacity: 0;
+            white-space: nowrap;
+            box-shadow: 0 4px 30px rgba(124, 247, 255, 0.2);
+        }
+
+        #achToast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* ─── ACHIEVEMENTS BAR ─────────────────────────────────────── */
+        .achWrap {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background: rgba(11, 16, 32, 0.80);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 10px clamp(16px, 4vw, 80px);
+        }
+
+        .achHeader {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .achTitle {
+            font-weight: 800;
+            font-size: 0.8rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .achSub {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.45);
+        }
+
+        .achGrid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .ach {
+            user-select: none;
+            border-radius: 999px;
+            padding: 5px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(0, 0, 0, 0.20);
+            color: rgba(255, 255, 255, 0.40);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            transition: all 200ms ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ach::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(124, 247, 255, 0.15), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .ach.unlocked {
+            color: var(--fg);
+            border-color: rgba(124, 247, 255, 0.45);
+            background: rgba(124, 247, 255, 0.12);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 12px rgba(124, 247, 255, 0.2);
+        }
+
+        .ach.unlocked::after {
+            opacity: 1;
+        }
+
+        .ach.pop {
+            animation: achPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes achPop {
+            0% {
+                transform: scale(0.8) translateY(-1px);
+            }
+
+            60% {
+                transform: scale(1.1) translateY(-2px);
+            }
+
+            100% {
+                transform: scale(1) translateY(-1px);
+            }
+        }
+
+        /* ─── HERO ─────────────────────────────────────────────────── */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 24px;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .hero-glow {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(800px 500px at 50% 30%, rgba(124, 247, 255, 0.12), transparent 60%),
+                radial-gradient(600px 400px at 80% 70%, rgba(255, 72, 178, 0.10), transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 700px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(124, 247, 255, 0.35);
+            background: rgba(124, 247, 255, 0.10);
+            color: var(--accent);
+            font-size: 0.75rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+            animation: fadeUp 0.8s ease both;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.8rem, 8vw, 6rem);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--fg) 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeUp 0.8s 0.1s ease both;
+        }
+
+        .hero-sub {
+            margin-top: 20px;
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: rgba(255, 255, 255, 0.65);
+            max-width: 55ch;
+            margin-inline: auto;
+            animation: fadeUp 0.8s 0.2s ease both;
+        }
+
+        .hero-cta {
+            margin-top: 36px;
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeUp 0.8s 0.3s ease both;
+        }
+
+        .btn-primary {
+            padding: 14px 28px;
+            border-radius: 999px;
+            border: none;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: #000;
+            font-weight: 800;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: transform 160ms ease, box-shadow 160ms ease;
+            box-shadow: 0 4px 24px rgba(124, 247, 255, 0.30);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 32px rgba(124, 247, 255, 0.45);
+        }
+
+        .btn-ghost {
+            padding: 13px 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--fg);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 160ms ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(124, 247, 255, 0.06);
+        }
+
+        /* Hero user counter */
+        .hero-stats {
+            margin-top: 52px;
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeUp 0.8s 0.4s ease both;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-num {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--accent);
+            text-shadow: 0 0 16px var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 2px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ─── MACHINE / ERAS ───────────────────────────────────────── */
+        .machine {
+            position: relative;
+            z-index: 1;
+        }
+
+        .era {
+            min-height: 100vh;
+            padding: 80px clamp(16px, 4vw, 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* per-era tint overlays */
+        .era::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .era.in-view::before {
+            opacity: 1;
+        }
+
+        #era-1995::before {
+            background: radial-gradient(ellipse at 30% 40%, rgba(60, 150, 255, 0.08), transparent 60%);
+        }
+
+        #era-2000::before {
+            background: radial-gradient(ellipse at 70% 30%, rgba(255, 180, 60, 0.08), transparent 60%);
+        }
+
+        #era-2005::before {
+            background: radial-gradient(ellipse at 40% 60%, rgba(90, 255, 170, 0.08), transparent 60%);
+        }
+
+        #era-2010::before {
+            background: radial-gradient(ellipse at 60% 40%, rgba(120, 180, 255, 0.08), transparent 60%);
+        }
+
+        #era-2015::before {
+            background: radial-gradient(ellipse at 30% 50%, rgba(140, 120, 255, 0.08), transparent 60%);
+        }
+
+        #era-2020::before {
+            background: radial-gradient(ellipse at 70% 60%, rgba(124, 247, 255, 0.08), transparent 60%);
+        }
+
+        #era-2025::before {
+            background: radial-gradient(ellipse at 40% 30%, rgba(255, 120, 210, 0.08), transparent 60%);
+        }
+
+        #era-2030::before {
+            background: radial-gradient(ellipse at 60% 50%, rgba(90, 255, 255, 0.10), transparent 60%);
+        }
+
+        .eraInner {
+            width: 100%;
+            max-width: var(--max-w);
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .eraInner {
+                grid-template-columns: 1fr;
+            }
+
+            .nav,
+            #timeMeter {
+                display: none;
+            }
+        }
+
+        /* main card */
+        .eraCard {
+            border-radius: var(--radius);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: clamp(20px, 3vw, 36px);
+            transform: translateY(40px);
+            opacity: 0;
+            transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.6s ease, background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .era.in-view .eraCard {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .eraTop {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .year {
+            font-weight: 900;
+            letter-spacing: 0.02em;
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            color: var(--fg);
+        }
+
+        .tag {
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 0.85rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .desc {
+            max-width: 60ch;
+            color: rgba(255, 255, 255, 0.80);
+            margin-bottom: 20px;
+        }
+
+        hr.sep {
+            border: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            margin: 20px 0;
+            opacity: 0.5;
+        }
+
+        /* tech unlocks */
+        .techUnlock {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .techTag {
+            padding: 4px 11px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: rgba(124, 247, 255, 0.10);
+            border: 1px solid rgba(124, 247, 255, 0.25);
+            color: var(--accent);
+            letter-spacing: 0.04em;
+            animation: techReveal 0.4s ease both;
+        }
+
+        @keyframes techReveal {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* kv grid */
+        .kv {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .kv .item {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.15);
+            padding: 10px 12px;
+        }
+
+        .kv .k {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.50);
+            margin-bottom: 4px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .kv .v {
+            color: var(--fg);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* milestone column */
+        .milestoneCol {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            transform: translateY(40px);
+            opacity: 0;
+            transition: transform 0.6s 0.15s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.6s 0.15s ease;
+        }
+
+        .era.in-view .milestoneCol {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .milestoneCard {
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.20);
+            padding: 14px 16px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            backdrop-filter: blur(6px);
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .milestoneCard:hover {
+            border-color: rgba(124, 247, 255, 0.25);
+            background: rgba(124, 247, 255, 0.05);
+        }
+
+        .milestone-icon {
+            font-size: 1.4rem;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .milestone-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 3px;
+        }
+
+        .milestone-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.55);
+            line-height: 1.4;
+        }
+
+        .milestone-date {
+            font-size: 0.7rem;
+            color: var(--accent);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        /* speed simulator */
+        .speedBar {
+            margin-top: 16px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .speed-label {
+            font-size: 0.72rem;
+            color: rgba(255, 255, 255, 0.45);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .speed-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .speed-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+            width: 0%;
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        .speed-text {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.60);
+        }
+
+        /* ─── GRAVEYARD SECTION ────────────────────────────────────── */
+        .graveyard {
+            min-height: 70vh;
+            padding: 80px clamp(16px, 4vw, 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .graveyard-inner {
+            width: 100%;
+            max-width: var(--max-w);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-eyebrow {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 999px;
+            background: rgba(255, 72, 178, 0.12);
+            border: 1px solid rgba(255, 72, 178, 0.30);
+            color: var(--accent2);
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 900;
+            letter-spacing: -0.01em;
+            margin-bottom: 12px;
+        }
+
+        .section-sub {
+            color: rgba(255, 255, 255, 0.55);
+            max-width: 55ch;
+            margin-inline: auto;
+        }
+
+        .tombstones {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 20px;
+        }
+
+        .tombstone {
+            text-align: center;
+            padding: 24px 16px 20px;
+            border-radius: 16px 16px 0 0;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.25));
+            position: relative;
+            transform: translateY(30px);
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+
+        .tombstone.visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .tombstone::after {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.30);
+            border-radius: 0 0 4px 4px;
+        }
+
+        .tombstone:hover {
+            border-color: rgba(255, 72, 178, 0.30);
+            background: linear-gradient(180deg, rgba(255, 72, 178, 0.06), rgba(0, 0, 0, 0.25));
+        }
+
+        .tomb-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .tomb-name {
+            font-weight: 800;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+
+        .tomb-rip {
+            font-size: 0.7rem;
+            color: rgba(255, 72, 178, 0.80);
+            letter-spacing: 0.08em;
+            font-weight: 700;
+        }
+
+        .tomb-years {
+            font-size: 0.72rem;
+            color: rgba(255, 255, 255, 0.40);
+            margin-top: 2px;
+        }
+
+        /* ─── DNA ANALYZER ─────────────────────────────────────────── */
+        .dna-section {
+            min-height: 60vh;
+            padding: 80px clamp(16px, 4vw, 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .dna-inner {
+            width: 100%;
+            max-width: 680px;
+            text-align: center;
+        }
+
+        .dna-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin: 32px 0;
+        }
+
+        .dna-btn {
+            padding: 12px 22px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.70);
+            font: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 200ms ease;
+        }
+
+        .dna-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(124, 247, 255, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .dna-btn.selected {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(124, 247, 255, 0.15);
+            box-shadow: 0 0 16px rgba(124, 247, 255, 0.20);
+        }
+
+        .dna-result {
+            display: none;
+            padding: 28px;
+            border-radius: 20px;
+            border: 1px solid rgba(124, 247, 255, 0.30);
+            background: rgba(124, 247, 255, 0.08);
+            animation: fadeUp 0.5s ease;
+        }
+
+        .dna-result.show {
+            display: block;
+        }
+
+        .dna-result-title {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .dna-result-sub {
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 0.9rem;
+        }
+
+        /* ─── FUTURE PREDICTIONS ───────────────────────────────────── */
+        .future-section {
+            min-height: 70vh;
+            padding: 80px clamp(16px, 4vw, 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .future-inner {
+            width: 100%;
+            max-width: var(--max-w);
+        }
+
+        .predictions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .prediction-card {
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(0, 0, 0, 0.20);
+            transition: all 0.3s ease;
+        }
+
+        .prediction-card:hover {
+            border-color: rgba(90, 255, 255, 0.30);
+            background: rgba(90, 255, 255, 0.06);
+            transform: translateY(-3px);
+        }
+
+        .prediction-icon {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .prediction-title {
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+        .prediction-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.55);
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+
+        .vote-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .vote-btn {
+            flex: 1;
+            padding: 7px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.60);
+            font: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 160ms ease;
+        }
+
+        .vote-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .vote-btn.voted-yes {
+            background: rgba(90, 255, 170, 0.15);
+            border-color: rgba(90, 255, 170, 0.40);
+            color: #5affa8;
+        }
+
+        .vote-btn.voted-no {
+            background: rgba(255, 72, 178, 0.15);
+            border-color: rgba(255, 72, 178, 0.40);
+            color: var(--accent2);
+        }
+
+        .vote-count {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.35);
+            margin-top: 6px;
+            text-align: right;
+        }
+
+        /* ─── MUSEUM GUIDE ─────────────────────────────────────────── */
+        #museumGuide {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        #guideBubble {
+            max-width: 240px;
+            padding: 12px 16px;
+            border-radius: 16px 16px 4px 16px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(124, 247, 255, 0.30);
+            font-size: 0.82rem;
+            line-height: 1.5;
+            color: var(--fg);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40);
+            display: none;
+            animation: fadeUp 0.3s ease;
+        }
+
+        #guideBubble.visible {
+            display: block;
+        }
+
+        #guideBtn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid rgba(124, 247, 255, 0.35);
+            background: rgba(11, 16, 32, 0.90);
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            transition: all 200ms ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+            color: white;
+        }
+
+        #guideBtn:hover {
+            transform: scale(1.05);
+            border-color: var(--accent);
+            box-shadow: 0 0 16px rgba(124, 247, 255, 0.25);
+        }
+
+        /* ─── ENDING CINEMATIC ─────────────────────────────────────── */
+        .ending {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 24px;
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .ending-glow {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(800px 500px at 50% 50%, rgba(124, 247, 255, 0.12), transparent 60%),
+                radial-gradient(600px 400px at 20% 80%, rgba(255, 72, 178, 0.10), transparent 60%);
+            pointer-events: none;
+        }
+
+        .ending-inner {
+            position: relative;
+            z-index: 2;
+            max-width: 700px;
+        }
+
+        .ending-title {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 900;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--fg) 20%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+        }
+
+        .ending-sub {
+            color: rgba(255, 255, 255, 0.60);
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+
+        .ending-pillars {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .pillar {
+            padding: 20px 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.04);
+            min-width: 130px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .pillar:hover {
+            transform: translateY(-4px);
+        }
+
+        .pillar-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .pillar-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .pillar-sub {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 4px;
+        }
+
+        .repo-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--fg);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.95rem;
+            transition: all 200ms ease;
+        }
+
+        .repo-link:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(124, 247, 255, 0.08);
+        }
+
+        /* ─── STARS CANVAS ─────────────────────────────────────────── */
+        #starsCanvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ─── SCROLL REVEAL ────────────────────────────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ─── DIALUP LOADER (1995) ─────────────────────────────────── */
+        .dialup-loader {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #3c96ff;
+            margin-top: 14px;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 8px;
+            border: 1px solid rgba(60, 150, 255, 0.20);
+        }
+
+        .dialup-loader .d-line {
+            margin-bottom: 4px;
+        }
+
+        .dialup-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 6px 0;
+        }
+
+        .dialup-fill {
+            height: 100%;
+            background: #3c96ff;
+            border-radius: 4px;
+            animation: dialup 4s ease-in-out infinite;
+        }
+
+        @keyframes dialup {
+            0% {
+                width: 0%
+            }
+
+            40% {
+                width: 42%
+            }
+
+            60% {
+                width: 43%
+            }
+
+            80% {
+                width: 44%
+            }
+
+            100% {
+                width: 44%
+            }
+        }
+
+        /* ─── INTERNET USERS COUNTER ───────────────────────────────── */
+        .users-bar {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .user-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-year {
+            font-size: 0.72rem;
+            color: rgba(255, 255, 255, 0.45);
+            width: 36px;
+            flex-shrink: 0;
+        }
+
+        .user-track {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .user-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            width: 0;
+            transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .user-count {
+            font-size: 0.72rem;
+            color: var(--accent);
+            font-weight: 700;
+            width: 80px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        /* ─── EASTER EGG UNDER CONSTRUCTION ───────────────────────── */
+        .under-construction {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(255, 200, 60, 0.10);
+            border: 1px solid rgba(255, 200, 60, 0.25);
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #ffc83c;
+            margin-top: 14px;
+            transition: all 160ms ease;
+            animation: blink 1.5s step-end infinite;
+        }
+
+        .under-construction:hover {
+            background: rgba(255, 200, 60, 0.18);
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* ─── USER COUNTER BANNER ──────────────────────────────────── */
+        .counter-banner {
+            position: fixed;
+            top: 3px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+            background: rgba(0, 0, 0, 0.70);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(124, 247, 255, 0.15);
+            border-radius: 0 0 999px 999px;
+            padding: 5px 18px;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.50);
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .counter-banner b {
+            color: var(--accent);
+        }
+
+        /* ─── COMPARISON TOGGLE ────────────────────────────────────── */
+        .compare-section {
+            min-height: 60vh;
+            padding: 80px clamp(16px, 4vw, 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .compare-inner {
+            width: 100%;
+            max-width: var(--max-w);
+        }
+
+        .compare-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            margin-top: 32px;
+        }
+
+        @media (max-width: 700px) {
+            .compare-split {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .compare-pane {
+            padding: 28px 24px;
+            background: rgba(0, 0, 0, 0.20);
+        }
+
+        .compare-pane:first-child {
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .compare-era-label {
+            font-size: 2rem;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
+
+        .compare-pane:first-child .compare-era-label {
+            color: #3c96ff;
+        }
+
+        .compare-pane:last-child .compare-era-label {
+            color: var(--accent);
+        }
+
+        .compare-desc {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.55);
+            margin-bottom: 14px;
+        }
+
+        .compare-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .compare-item {
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Scroll Progress Bar -->
+    <div id="progressBar"></div>
+
+    <!-- Stars background -->
+    <canvas id="starsCanvas"></canvas>
+
+    <!-- User counter banner -->
+    <div class="counter-banner">
+        🌐 Internet Users in <b id="liveYear">1995</b>: <b id="liveUsers">16M</b>
+    </div>
+
+    <!-- Side Nav -->
+    <nav class="nav" aria-label="Era navigation">
+        <button type="button" data-jump="era-1995">1995</button>
+        <button type="button" data-jump="era-2000">2000</button>
+        <button type="button" data-jump="era-2005">2005</button>
+        <button type="button" data-jump="era-2010">2010</button>
+        <button type="button" data-jump="era-2015">2015</button>
+        <button type="button" data-jump="era-2020">2020</button>
+        <button type="button" data-jump="era-2025">2025</button>
+        <button type="button" data-jump="era-2030">2030</button>
+    </nav>
+
+    <!-- Time Meter -->
+    <div id="timeMeter">
+        <span class="meter-label">YEAR</span>
+        <div id="yearDisplay">1995</div>
+    </div>
+
+    <!-- Achievement Toast -->
+    <div id="achToast">🏆 <span id="achToastText">Achievement Unlocked!</span></div>
+
+    <!-- Museum Guide -->
+    <div id="museumGuide">
+        <div id="guideBubble"></div>
+        <button id="guideBtn" title="Museum Guide">🤖</button>
+    </div>
+
+    <!-- Achievements Bar -->
+    <div class="achWrap" aria-label="Achievements">
+        <div class="achHeader">
+            <div class="achTitle">🏆 Time Travel Achievements</div>
+            <div class="achSub" id="achCount">0 / 10 unlocked</div>
+        </div>
+        <div class="achGrid" id="achGrid">
+            <div class="ach" data-ach="1995"><span class="medal">🕸️</span><span class="name">Birth of the Web</span>
+            </div>
+            <div class="ach" data-ach="dialup"><span class="medal">📡</span><span class="name">Survived Dial-Up</span>
+            </div>
+            <div class="ach" data-ach="2000"><span class="medal">💥</span><span class="name">Dot-Com Survivor</span>
+            </div>
+            <div class="ach" data-ach="2005"><span class="medal">🌐</span><span class="name">Web 2.0 Pioneer</span>
+            </div>
+            <div class="ach" data-ach="2010"><span class="medal">📱</span><span class="name">Mobile Revolution</span>
+            </div>
+            <div class="ach" data-ach="2015"><span class="medal">☁️</span><span class="name">Cloud Native</span></div>
+            <div class="ach" data-ach="2020"><span class="medal">🧊</span><span class="name">Glassmorphic</span></div>
+            <div class="ach" data-ach="2025"><span class="medal">🤖</span><span class="name">AI Era</span></div>
+            <div class="ach" data-ach="egg"><span class="medal">🥚</span><span class="name">Easter Egg Found</span>
+            </div>
+            <div class="ach" data-ach="done"><span class="medal">🚀</span><span class="name">Time Travel Complete</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── HERO ─────────────────────────────────────────────────────── -->
+    <header class="hero">
+        <div class="hero-glow"></div>
+        <div class="hero-content">
+            <div class="hero-badge">✦ Interactive Museum</div>
+            <h1>Internet<br />Time Machine</h1>
+            <p class="hero-sub">Scroll through 35 years of web history — from dial-up to AI. Every pixel changes as you
+                travel through time.</p>
+            <div class="hero-cta">
+                <button class="btn-primary"
+                    onclick="document.getElementById('era-1995').scrollIntoView({behavior:'smooth'})">
+                    Start Traveling →
+                </button>
+                <a href="https://github.com" class="btn-ghost" target="_blank">⭐ Star on GitHub</a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <div class="stat-num">8</div>
+                    <div class="stat-label">Eras</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-num">35+</div>
+                    <div class="stat-label">Years</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-num">10</div>
+                    <div class="stat-label">Achievements</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ─── MACHINE ───────────────────────────────────────────────────── -->
+    <main class="machine" id="machine">
+
+        <!-- 1995 -->
+        <section class="era" id="era-1995" data-era="0">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">1995</h2>
+                        <span class="tag">Birth of the Web</span>
+                    </div>
+                    <p class="desc">The internet was raw, scrappy, and text-first. Dial-up modems sang you in. Most
+                        sites were personal pages built by hobbyists who just learned what a &lt;blink&gt; tag was.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">HTML</span>
+                        <span class="techTag">GIFs</span>
+                        <span class="techTag">Tables</span>
+                        <span class="techTag">Netscape</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Times New Roman</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Single column flow</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Gray + blue links</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Browser</div>
+                            <p class="v">Netscape Navigator</p>
+                        </div>
+                    </div>
+                    <div class="dialup-loader">
+                        <div class="d-line">Connecting to AOL...</div>
+                        <div class="d-line">♪ ke-ke-kshhhhh-bong ♫</div>
+                        <div class="dialup-bar">
+                            <div class="dialup-fill"></div>
+                        </div>
+                        <div class="d-line">Loading... 40%</div>
+                    </div>
+                    <span class="under-construction" id="eggTarget">🚧 Under Construction — Click Me!</span>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="4"></div>
+                        </div>
+                        <div class="speed-text">28.8 kbps dial-up modem</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🌍</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Aug 1995</div>
+                            <div class="milestone-title">Windows 95 ships with IE 1.0</div>
+                            <div class="milestone-desc">Microsoft bundles a browser with an OS for the first time,
+                                sparking the Browser Wars.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🛒</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Jul 1995</div>
+                            <div class="milestone-title">Amazon launches</div>
+                            <div class="milestone-desc">Jeff Bezos starts selling books online from a garage. Nobody
+                                thinks it'll work.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🔍</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">1995</div>
+                            <div class="milestone-title">AltaVista is the Google of its day</div>
+                            <div class="milestone-desc">The first full-text search engine. You typed in full sentences
+                                hoping for a miracle.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">1995</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="1"></div>
+                                    </div><span class="user-count">16M</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2000 -->
+        <section class="era" id="era-2000" data-era="1">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2000</h2>
+                        <span class="tag">Dot-Com Boom & Bust</span>
+                    </div>
+                    <p class="desc">Billions poured into any company with ".com" in the name. Flashy portals, animated
+                        banners, and sidebars crammed with widgets. Then the bubble burst, and only the strong survived.
+                    </p>
+                    <div class="techUnlock">
+                        <span class="techTag">CSS 1.0</span>
+                        <span class="techTag">Flash</span>
+                        <span class="techTag">JavaScript</span>
+                        <span class="techTag">Internet Explorer</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Tahoma / Verdana</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Portals + sidebars</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">High contrast chaos</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Browser</div>
+                            <p class="v">Internet Explorer 6</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="14"></div>
+                        </div>
+                        <div class="speed-text">56k modem → Early broadband</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">💸</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Mar 2000</div>
+                            <div class="milestone-title">Dot-com bubble peaks then collapses</div>
+                            <div class="milestone-desc">NASDAQ hits 5048 then crashes 78%. Pets.com. Webvan. Gone in
+                                months.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🔗</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Sep 1998</div>
+                            <div class="milestone-title">Google is founded</div>
+                            <div class="milestone-desc">Two Stanford students index the web with PageRank. The search
+                                engine era begins.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">1995</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="1"></div>
+                                    </div><span class="user-count">16M</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2000</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="8"></div>
+                                    </div><span class="user-count">361M</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2005 -->
+        <section class="era" id="era-2005" data-era="2">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2005</h2>
+                        <span class="tag">Web 2.0</span>
+                    </div>
+                    <p class="desc">Users became creators. Blogs, social profiles, and RSS feeds exploded. Shiny
+                        gradients, rounded corners, and reflection effects were the design language of the era.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">AJAX</span>
+                        <span class="techTag">XML</span>
+                        <span class="techTag">WordPress</span>
+                        <span class="techTag">MySpace</span>
+                        <span class="techTag">YouTube</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Verdana + glows</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Feed + sidebar</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Glossy gradients</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Browser</div>
+                            <p class="v">Firefox 1.0</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="32"></div>
+                        </div>
+                        <div class="speed-text">DSL broadband (1-10 Mbps)</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📘</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Feb 2004</div>
+                            <div class="milestone-title">Facebook launches from a Harvard dorm</div>
+                            <div class="milestone-desc">Mark Zuckerberg ships "TheFacebook.com" — originally
+                                Harvard-only, then the world.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">▶️</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Feb 2005</div>
+                            <div class="milestone-title">YouTube is founded</div>
+                            <div class="milestone-desc">Jawed, Chad and Steve build a platform to share videos. First
+                                video: "Me at the zoo."</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🐦</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Mar 2006</div>
+                            <div class="milestone-title">Twitter launches</div>
+                            <div class="milestone-desc">Jack Dorsey's first tweet: "just setting up my twttr" — 140
+                                characters changed the web.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">2000</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="8"></div>
+                                    </div><span class="user-count">361M</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2005</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="22"></div>
+                                    </div><span class="user-count">1.02B</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2010 -->
+        <section class="era" id="era-2010" data-era="3">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2010</h2>
+                        <span class="tag">Mobile Revolution</span>
+                    </div>
+                    <p class="desc">The iPhone changed everything. Designers suddenly had to think about thumbs.
+                        Responsive design was born, flat UI replaced skeuomorphism, and native apps fought for screen
+                        time.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">HTML5</span>
+                        <span class="techTag">CSS3</span>
+                        <span class="techTag">Responsive</span>
+                        <span class="techTag">iOS</span>
+                        <span class="techTag">Android</span>
+                        <span class="techTag">jQuery</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">System UI / web fonts</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Responsive grid</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Flat + bold</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Browser</div>
+                            <p class="v">Chrome (launched 2008)</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="54"></div>
+                        </div>
+                        <div class="speed-text">4G LTE → fiber (10-100 Mbps)</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📱</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Jun 2007</div>
+                            <div class="milestone-title">iPhone launches — everything changes</div>
+                            <div class="milestone-desc">Steve Jobs holds up a phone with "internet in your pocket." The
+                                mobile era begins.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📸</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Oct 2010</div>
+                            <div class="milestone-title">Instagram launches</div>
+                            <div class="milestone-desc">Photo-sharing app hits 1 million users in 3 months. Filters
+                                become a cultural phenomenon.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">2005</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="22"></div>
+                                    </div><span class="user-count">1.02B</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2010</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="42"></div>
+                                    </div><span class="user-count">2.0B</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2015 -->
+        <section class="era" id="era-2015" data-era="4">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2015</h2>
+                        <span class="tag">The SaaS & Cloud Era</span>
+                    </div>
+                    <p class="desc">Dashboards everywhere. Every startup offered a "platform." IoT connected your
+                        fridge. Material Design set the visual grammar. Everything became a subscription.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">React</span>
+                        <span class="techTag">Node.js</span>
+                        <span class="techTag">AWS</span>
+                        <span class="techTag">Docker</span>
+                        <span class="techTag">Slack</span>
+                        <span class="techTag">Webpack</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Roboto / Inter</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Card + dashboard panels</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Material purples/blues</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Framework</div>
+                            <p class="v">React / Angular</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="68"></div>
+                        </div>
+                        <div class="speed-text">Fiber broadband (100–500 Mbps)</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">☁️</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">2015</div>
+                            <div class="milestone-title">Cloud becomes the default</div>
+                            <div class="milestone-desc">AWS, Azure, GCP race for dominance. "Just put it in the cloud"
+                                becomes standard.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">⚡</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Mar 2015</div>
+                            <div class="milestone-title">React goes mainstream</div>
+                            <div class="milestone-desc">Facebook's UI library becomes the dominant way to build web
+                                apps. JSX divides opinions.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">2010</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="42"></div>
+                                    </div><span class="user-count">2.0B</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2015</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="60"></div>
+                                    </div><span class="user-count">3.2B</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2020 -->
+        <section class="era" id="era-2020" data-era="5">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2020</h2>
+                        <span class="tag">Remote-First & Dark Mode</span>
+                    </div>
+                    <p class="desc">A pandemic forced the world online overnight. Glassmorphism. Dark mode. Zoom
+                        fatigue. Typography became the star. Design systems matured into company assets.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">Next.js</span>
+                        <span class="techTag">TypeScript</span>
+                        <span class="techTag">Tailwind</span>
+                        <span class="techTag">Figma</span>
+                        <span class="techTag">GraphQL</span>
+                        <span class="techTag">Vercel</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Inter / Söhne / DM Sans</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Grid discipline + white space</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Dark + glass + accent</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Aesthetic</div>
+                            <p class="v">Glassmorphism</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="82"></div>
+                        </div>
+                        <div class="speed-text">1 Gbps fiber / 5G mobile</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🦠</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Mar 2020</div>
+                            <div class="milestone-title">COVID-19 moves work online</div>
+                            <div class="milestone-desc">Zoom's daily users jumped from 10M to 300M in weeks. Remote work
+                                became the norm.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🎨</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">2020</div>
+                            <div class="milestone-title">Design systems go mainstream</div>
+                            <div class="milestone-desc">Figma, design tokens, and component libraries become table
+                                stakes for every product team.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">2015</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="60"></div>
+                                    </div><span class="user-count">3.2B</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2020</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="82"></div>
+                                    </div><span class="user-count">4.66B</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2025 -->
+        <section class="era" id="era-2025" data-era="6">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2025</h2>
+                        <span class="tag">AI + Immersive UI</span>
+                    </div>
+                    <p class="desc">AI co-pilots write your code, your copy, your UI. Interfaces turned conversational.
+                        Generative everything. Vibe coding replaced boilerplate. The prompt became the product.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">LLMs</span>
+                        <span class="techTag">Claude</span>
+                        <span class="techTag">GPT-4</span>
+                        <span class="techTag">Cursor</span>
+                        <span class="techTag">WebGPU</span>
+                        <span class="techTag">Edge Runtime</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Variable / geist</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Floating panels</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Magenta / cyan neon</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Paradigm</div>
+                            <p class="v">AI-assisted everything</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Connection Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="92"></div>
+                        </div>
+                        <div class="speed-text">Multi-Gbps fiber + 5G everywhere</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🤖</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Nov 2022</div>
+                            <div class="milestone-title">ChatGPT reaches 100M users in 60 days</div>
+                            <div class="milestone-desc">The fastest-adopted consumer tech ever. Every company scrambles
+                                to add "AI features."</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🎨</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">2024–2025</div>
+                            <div class="milestone-title">Vibe coding goes mainstream</div>
+                            <div class="milestone-desc">Cursor, v0, Claude, Bolt.new let non-engineers ship products.
+                                The IDE era transforms.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">📊</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Internet Users</div>
+                            <div class="users-bar">
+                                <div class="user-row"><span class="user-year">2020</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="82"></div>
+                                    </div><span class="user-count">4.66B</span>
+                                </div>
+                                <div class="user-row"><span class="user-year">2025</span>
+                                    <div class="user-track">
+                                        <div class="user-fill" data-w="93"></div>
+                                    </div><span class="user-count">5.4B+</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2030 -->
+        <section class="era" id="era-2030" data-era="7">
+            <div class="eraInner">
+                <div class="eraCard">
+                    <div class="eraTop">
+                        <h2 class="year">2030</h2>
+                        <span class="tag">Predictions</span>
+                    </div>
+                    <p class="desc">We're speculating now. Will spatial computing kill screens? Will AI generate UI in
+                        real-time for each user? Will your brain be an input device? The next chapter is unwritten.</p>
+                    <div class="techUnlock">
+                        <span class="techTag">Spatial Web</span>
+                        <span class="techTag">Brain-Computer</span>
+                        <span class="techTag">Self-writing Apps</span>
+                        <span class="techTag">Ambient AI</span>
+                    </div>
+                    <hr class="sep" />
+                    <div class="kv">
+                        <div class="item">
+                            <div class="k">Fonts</div>
+                            <p class="v">Adaptive / AI-selected</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Layout</div>
+                            <p class="v">Spatial + holographic</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Colors</div>
+                            <p class="v">Neon + photonic</p>
+                        </div>
+                        <div class="item">
+                            <div class="k">Input</div>
+                            <p class="v">Voice, gesture, thought?</p>
+                        </div>
+                    </div>
+                    <div class="speedBar">
+                        <div class="speed-label">Predicted Speed</div>
+                        <div class="speed-track">
+                            <div class="speed-fill" data-speed="99"></div>
+                        </div>
+                        <div class="speed-text">6G — terabits / sub-1ms latency</div>
+                    </div>
+                </div>
+                <div class="milestoneCol">
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🥽</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Prediction</div>
+                            <div class="milestone-title">Spatial web replaces flat screens</div>
+                            <div class="milestone-desc">AR glasses become as common as smartphones. Web design becomes
+                                3D environment design.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">🧠</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Prediction</div>
+                            <div class="milestone-title">Brain-computer interfaces go consumer</div>
+                            <div class="milestone-desc">Direct neural input for high-bandwidth users. Thought becomes an
+                                API call.</div>
+                        </div>
+                    </div>
+                    <div class="milestoneCard">
+                        <div class="milestone-icon">⚗️</div>
+                        <div class="milestone-body">
+                            <div class="milestone-date">Prediction</div>
+                            <div class="milestone-title">Self-creating websites</div>
+                            <div class="milestone-desc">AI generates an entire personalized UI for each visitor in real
+                                time. No two sessions look the same.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ─── ERA COMPARISON ─────────────────────────────────────────────── -->
+    <section class="compare-section reveal">
+        <div class="compare-inner">
+            <div class="section-header">
+                <div class="section-eyebrow">Split Screen</div>
+                <h2 class="section-title">Then vs. Now</h2>
+                <p class="section-sub">The same content. 25 years of design evolution. Side by side.</p>
+            </div>
+            <div class="compare-split">
+                <div class="compare-pane">
+                    <div class="compare-era-label">1995</div>
+                    <p class="compare-desc">Personal homepage. Under construction. Best viewed in Netscape.</p>
+                    <div class="compare-items">
+                        <div class="compare-item">🔵 Blue underlined hyperlinks only</div>
+                        <div class="compare-item">📋 Tables for layout (not data)</div>
+                        <div class="compare-item">🎞️ Animated GIFs everywhere</div>
+                        <div class="compare-item">🖼️ Images take 45 seconds to load</div>
+                        <div class="compare-item">❌ No CSS, no JavaScript</div>
+                    </div>
+                </div>
+                <div class="compare-pane">
+                    <div class="compare-era-label">2025</div>
+                    <p class="compare-desc">Dark mode SaaS. Glassmorphism. AI co-pilot. Zero loading state.</p>
+                    <div class="compare-items">
+                        <div class="compare-item">✨ Scroll-triggered animations</div>
+                        <div class="compare-item">🧊 Glassmorphic layered cards</div>
+                        <div class="compare-item">🤖 AI-generated content & UI</div>
+                        <div class="compare-item">⚡ Instant load with edge CDN</div>
+                        <div class="compare-item">📱 Fully responsive + accessible</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ─── WEBSITE GRAVEYARD ──────────────────────────────────────────── -->
+    <section class="graveyard">
+        <div class="graveyard-inner">
+            <div class="section-header reveal">
+                <div class="section-eyebrow">⚰️ In Memoriam</div>
+                <h2 class="section-title">The Website Graveyard</h2>
+                <p class="section-sub">Technologies that once ran the internet. They will not be forgotten — only
+                    mocked, lovingly.</p>
+            </div>
+            <div class="tombstones">
+                <div class="tombstone"><span class="tomb-icon">⚡</span>
+                    <div class="tomb-name">Flash</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">1996 – 2020</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">🌐</span>
+                    <div class="tomb-name">Internet Explorer</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">1995 – 2022</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">💀</span>
+                    <div class="tomb-name">Adobe Shockwave</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">1995 – 2019</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">📰</span>
+                    <div class="tomb-name">Google Reader</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">2005 – 2013</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">🎵</span>
+                    <div class="tomb-name">MySpace</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">2003 – 2019</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">📷</span>
+                    <div class="tomb-name">Vine</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">2012 – 2017</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">🌍</span>
+                    <div class="tomb-name">GeoCities</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">1994 – 2009</div>
+                </div>
+                <div class="tombstone"><span class="tomb-icon">💬</span>
+                    <div class="tomb-name">MSN Messenger</div>
+                    <div class="tomb-rip">R.I.P.</div>
+                    <div class="tomb-years">1999 – 2013</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ─── FUTURE PREDICTIONS ────────────────────────────────────────── -->
+    <section class="future-section">
+        <div class="future-inner">
+            <div class="section-header reveal">
+                <div class="section-eyebrow"
+                    style="background:rgba(90,255,255,0.10);border-color:rgba(90,255,255,0.30);color:#5affff;">🔭
+                    Looking Forward</div>
+                <h2 class="section-title">Future Prediction Engine</h2>
+                <p class="section-sub">Vote on what you think will actually happen by 2030. Your votes are saved
+                    locally.</p>
+            </div>
+            <div class="predictions-grid" id="predictionsGrid">
+                <!-- injected by JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- ─── DNA ANALYZER ──────────────────────────────────────────────── -->
+    <section class="dna-section">
+        <div class="dna-inner reveal">
+            <div class="section-eyebrow" style="margin-bottom:16px;">🧬 Design DNA</div>
+            <h2 class="section-title">Which era are you?</h2>
+            <p class="section-sub">Pick the web aesthetic that resonates most with your design soul.</p>
+            <div class="dna-options" id="dnaOptions">
+                <button class="dna-btn" data-era-pick="1995"
+                    data-desc="You appreciate raw HTML authenticity. You miss when the web felt like a science project.">1995
+                    — Old School</button>
+                <button class="dna-btn" data-era-pick="2000"
+                    data-desc="Bold and chaotic. You believe more is more. You'd absolutely use a hit counter.">2000 —
+                    Maximalist</button>
+                <button class="dna-btn" data-era-pick="2005"
+                    data-desc="Social and expressive. You customized your MySpace. You were early to everything.">2005 —
+                    Social Pioneer</button>
+                <button class="dna-btn" data-era-pick="2010"
+                    data-desc="Clean and mobile-first. You love flat design. Touch UI feels natural to you.">2010 —
+                    Mobile Native</button>
+                <button class="dna-btn" data-era-pick="2015"
+                    data-desc="You speak in components and APIs. You have strong opinions about state management.">2015
+                    — SaaS Builder</button>
+                <button class="dna-btn" data-era-pick="2020"
+                    data-desc="Glassmorphic. Minimal. Dark mode always. You care deeply about design systems.">2020 —
+                    Modern Purist</button>
+                <button class="dna-btn" data-era-pick="2025"
+                    data-desc="You vibe-code at 2am. Prompts are your design tool. The future already arrived for you.">2025
+                    — AI Native</button>
+            </div>
+            <div class="dna-result" id="dnaResult">
+                <div class="dna-result-title" id="dnaResultTitle"></div>
+                <div class="dna-result-sub" id="dnaResultSub"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ─── ENDING ────────────────────────────────────────────────────── -->
+    <section class="ending" id="ending">
+        <div class="ending-glow"></div>
+        <div class="ending-inner reveal">
+            <h2 class="ending-title">You've Traveled<br />35 Years of Internet</h2>
+            <p class="ending-sub">From 28.8 kbps to terabits. From GeoCities to AI that builds websites. The web keeps
+                accelerating — and you just witnessed it all.</p>
+            <div class="ending-pillars">
+                <div class="pillar">
+                    <div class="pillar-icon">⏮</div>
+                    <div class="pillar-name">The Past</div>
+                    <div class="pillar-sub">Raw & scrappy</div>
+                </div>
+                <div class="pillar">
+                    <div class="pillar-icon">▶</div>
+                    <div class="pillar-name">The Present</div>
+                    <div class="pillar-sub">Fast & AI-driven</div>
+                </div>
+                <div class="pillar">
+                    <div class="pillar-icon">⏭</div>
+                    <div class="pillar-name">The Future</div>
+                    <div class="pillar-sub">Unwritten</div>
+                </div>
+            </div>
+            <a href="https://github.com" class="repo-link" target="_blank">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path
+                        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                </svg>
+                View on GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- ─── JAVASCRIPT ─────────────────────────────────────────────────── -->
+    <script>
+        /* ═══════════════════════════════════════════════════════════════
+           DATA
+        ═══════════════════════════════════════════════════════════════ */
+        const ERAS = [
+            { year: 1995, bg: [20, 20, 20], fg: [235, 235, 235], accent: [60, 150, 255], font: "Georgia,'Times New Roman',serif", radius: 6, padY: 72 },
+            { year: 2000, bg: [10, 25, 45], fg: [240, 248, 255], accent: [255, 180, 60], font: "Tahoma,Verdana,Arial,sans-serif", radius: 14, padY: 66 },
+            { year: 2005, bg: [8, 10, 20], fg: [240, 255, 245], accent: [90, 255, 170], font: "Verdana,Arial,sans-serif", radius: 18, padY: 64 },
+            { year: 2010, bg: [5, 12, 22], fg: [240, 245, 255], accent: [120, 180, 255], font: "system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif", radius: 18, padY: 62 },
+            { year: 2015, bg: [12, 22, 35], fg: [235, 243, 255], accent: [140, 120, 255], font: "system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif", radius: 20, padY: 62 },
+            { year: 2020, bg: [8, 12, 18], fg: [234, 242, 255], accent: [124, 247, 255], font: "system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif", radius: 22, padY: 60 },
+            { year: 2025, bg: [10, 8, 20], fg: [242, 238, 255], accent: [255, 120, 210], font: "system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif", radius: 24, padY: 58 },
+            { year: 2030, bg: [6, 10, 18], fg: [240, 250, 255], accent: [90, 255, 255], font: "system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif", radius: 26, padY: 56 },
+        ];
+
+        const USERS = { 1995: "16M", 2000: "361M", 2005: "1.02B", 2010: "2.0B", 2015: "3.2B", 2020: "4.66B", 2025: "5.4B+", 2030: "~6.5B" };
+
+        const GUIDE_LINES = {
+            1995: "👋 Welcome, traveler. We're in 1995. Most people don't know what a website is yet. Dial-up modems reign supreme.",
+            2000: "💥 Welcome to 2000. Half these companies will be bankrupt in 18 months. The bubble is real.",
+            2005: "🌐 2005! Web 2.0 is born. YouTube launched this year. MySpace is the biggest site on earth.",
+            2010: "📱 2010. The iPhone is 3 years old and already everything changed. We now think in screens plural.",
+            2015: "☁️ Welcome to the cloud era. If your startup doesn't have a Slack channel, does it even exist?",
+            2020: "🧊 2020. Dark mode mandatory. Glassmorphism is everywhere. Also there's a global pandemic, but the design is very clean.",
+            2025: "🤖 2025. I'm Claude. I literally helped build this page. AI writes the code now. Wild, right?",
+            2030: "🔭 Welcome to the future. We're speculating from here. Thanks for traveling with us."
+        };
+
+        const PREDICTIONS = [
+            { id: "p1", icon: "🥽", title: "AR glasses replace smartphones", desc: "Spatial computing becomes the primary interface by 2030." },
+            { id: "p2", icon: "🧠", title: "Brain-computer interfaces go consumer", desc: "Neuralink-style devices become accessible to regular people." },
+            { id: "p3", icon: "🤖", title: "AI generates UIs in real-time per user", desc: "Every visitor sees a different, personalized interface." },
+            { id: "p4", icon: "🗣️", title: "Voice-first websites dominate", desc: "Most web sessions happen without touching a keyboard." },
+            { id: "p5", icon: "⚗️", title: "Self-writing websites", desc: "You describe what you want and the site builds itself instantly." },
+            { id: "p6", icon: "🌐", title: "Decentralized web wins", desc: "Blockchain-based identity and data ownership become mainstream." },
+            { id: "p7", icon: "🚫", title: "Traditional web dev jobs disappear", desc: "AI handles 90% of what developers do today." },
+            { id: "p8", icon: "♾️", title: "The web becomes sentient", desc: "Emergent AI behavior creates a truly autonomous web layer." },
+        ];
+
+        /* ═══════════════════════════════════════════════════════════════
+           UTILITIES
+        ═══════════════════════════════════════════════════════════════ */
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const rgb = arr => `rgb(${Math.round(arr[0])},${Math.round(arr[1])},${Math.round(arr[2])})`;
+        const lerpRGB = (c0, c1, t) => c0.map((v, i) => lerp(v, c1[i], t));
+
+        const root = document.documentElement;
+        const $ = s => document.querySelector(s);
+        const $$ = s => Array.from(document.querySelectorAll(s));
+
+        /* ═══════════════════════════════════════════════════════════════
+           STARS CANVAS
+        ═══════════════════════════════════════════════════════════════ */
+        (function initStars() {
+            const canvas = $('#starsCanvas');
+            const ctx = canvas.getContext('2d');
+            let W, H, stars = [];
+            function resize() {
+                W = canvas.width = window.innerWidth;
+                H = canvas.height = window.innerHeight;
+                stars = Array.from({ length: 120 }, () => ({
+                    x: Math.random() * W, y: Math.random() * H,
+                    r: Math.random() * 1.2 + 0.3,
+                    speed: Math.random() * 0.015 + 0.005,
+                    phase: Math.random() * Math.PI * 2
+                }));
+            }
+            function tick(t) {
+                ctx.clearRect(0, 0, W, H);
+                stars.forEach(s => {
+                    const opacity = 0.2 + 0.5 * (Math.sin(t * s.speed + s.phase) + 1) / 2;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200,230,255,${opacity})`;
+                    ctx.fill();
+                });
+                requestAnimationFrame(tick);
+            }
+            window.addEventListener('resize', resize);
+            resize();
+            requestAnimationFrame(tick);
+        })();
+
+        /* ═══════════════════════════════════════════════════════════════
+           ERA MORPH (SCROLL-DRIVEN THEME)
+        ═══════════════════════════════════════════════════════════════ */
+        const eraEls = $$('.era');
+        const navBtns = $$('.nav button');
+        const yearDisplayEl = $('#yearDisplay');
+        const liveYearEl = $('#liveYear');
+        const liveUsersEl = $('#liveUsers');
+        const progressBar = $('#progressBar');
+
+        function getScrollProgress() {
+            const first = eraEls[0];
+            const last = eraEls[eraEls.length - 1];
+            const start = first.getBoundingClientRect().top + window.scrollY;
+            const end = last.getBoundingClientRect().bottom + window.scrollY - window.innerHeight;
+            return clamp((window.scrollY - start) / Math.max(1, end - start), 0, 1);
+        }
+
+        let raf = 0;
+        function onScroll() {
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                const t = getScrollProgress();
+                const maxI = ERAS.length - 1;
+                const exact = t * maxI;
+                const i0 = Math.floor(exact), i1 = Math.min(maxI, i0 + 1), blend = exact - i0;
+                const e0 = ERAS[i0], e1 = ERAS[i1];
+
+                // Theme morph
+                root.style.setProperty('--bg', rgb(lerpRGB(e0.bg, e1.bg, blend)));
+                root.style.setProperty('--fg', rgb(lerpRGB(e0.fg, e1.fg, blend)));
+                root.style.setProperty('--accent', rgb(lerpRGB(e0.accent, e1.accent, blend)));
+                root.style.setProperty('--radius', `${lerp(e0.radius, e1.radius, blend)}px`);
+                root.style.setProperty('--font', blend < 0.5 ? e0.font : e1.font);
+
+                // Progress bar
+                progressBar.style.width = (t * 100) + '%';
+
+                // Year interpolation display
+                const displayYear = Math.round(lerp(e0.year, e1.year, blend));
+                yearDisplayEl.textContent = displayYear;
+                liveYearEl.textContent = e0.year;
+                liveUsersEl.textContent = USERS[e0.year] || '';
+
+                // Nav active
+                navBtns.forEach(b => b.classList.toggle('active', b.dataset.jump === `era-${e0.year}`));
+
+                // Scroll reveal
+                $$('.reveal').forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    el.classList.toggle('visible', rect.top < window.innerHeight * 0.88);
+                });
+
+                // Era sections in-view
+                eraEls.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    const inView = rect.top < window.innerHeight * 0.65 && rect.bottom > 0;
+                    el.classList.toggle('in-view', inView);
+                });
+
+                // Animate user bars when visible
+                $$('.user-fill').forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < window.innerHeight && !el.dataset.animated) {
+                        el.dataset.animated = '1';
+                        el.style.width = el.dataset.w + '%';
+                    }
+                });
+
+                // Animate speed fills
+                $$('.speed-fill').forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < window.innerHeight && !el.dataset.animated) {
+                        el.dataset.animated = '1';
+                        el.style.width = el.dataset.speed + '%';
+                    }
+                });
+
+                // Tombstones staggered reveal
+                $$('.tombstone').forEach((el, i) => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < window.innerHeight * 0.90) {
+                        setTimeout(() => el.classList.add('visible'), i * 60);
+                    }
+                });
+
+                // Achievement check
+                for (let i = 0; i <= i0; i++) unlockAch(String(ERAS[i].year));
+                if (i0 === 0) unlockAch('dialup');
+                if (t >= 0.995) { unlockAch('done'); showGuide('2030'); }
+                saveAchs();
+                applyAchUI();
+
+                // Guide update (debounced)
+                clearTimeout(guideTimer);
+                guideTimer = setTimeout(() => {
+                    currentEraYear = e0.year;
+                }, 300);
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ACHIEVEMENTS
+        ═══════════════════════════════════════════════════════════════ */
+        const ACH_KEY = 'itm_ach_v2';
+        let achSet = new Set();
+        try { achSet = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]')); } catch (e) { }
+
+        function saveAchs() { try { localStorage.setItem(ACH_KEY, JSON.stringify([...achSet])); } catch (e) { } }
+
+        function unlockAch(key) {
+            if (achSet.has(key)) return;
+            achSet.add(key);
+            showAchToast(key);
+            const el = $(`[data-ach="${key}"]`);
+            if (el) { el.classList.add('unlocked', 'pop'); }
+        }
+
+        function applyAchUI() {
+            const grid = $('#achGrid');
+            if (!grid) return;
+            let count = 0;
+            grid.querySelectorAll('.ach').forEach(n => {
+                const unlocked = achSet.has(n.dataset.ach);
+                n.classList.toggle('unlocked', unlocked);
+                if (unlocked) count++;
+            });
+            const sub = $('#achCount');
+            if (sub) sub.textContent = `${count} / 10 unlocked`;
+        }
+
+        let toastTimer = null;
+        function showAchToast(key) {
+            const labels = {
+                '1995': '🕸️ Birth of the Web unlocked!',
+                'dialup': '📡 Survived Dial-Up!',
+                '2000': '💥 Dot-Com Survivor!',
+                '2005': '🌐 Web 2.0 Pioneer!',
+                '2010': '📱 Mobile Revolution!',
+                '2015': '☁️ Cloud Native!',
+                '2020': '🧊 Glassmorphic!',
+                '2025': '🤖 AI Era!',
+                'egg': '🥚 Easter Egg Found!',
+                'done': '🚀 Time Travel Complete!'
+            };
+            const text = labels[key] || '🏆 Achievement Unlocked!';
+            $('#achToastText').textContent = text;
+            const toast = $('#achToast');
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+        }
+
+        applyAchUI();
+
+        /* ═══════════════════════════════════════════════════════════════
+           NAV BUTTONS
+        ═══════════════════════════════════════════════════════════════ */
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const el = document.getElementById(btn.dataset.jump);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        $$('.btn-primary, .btn-ghost').forEach(b => {
+            if (b.onclick) return;
+        });
+
+        /* ═══════════════════════════════════════════════════════════════
+           EASTER EGG
+        ═══════════════════════════════════════════════════════════════ */
+        $('#eggTarget')?.addEventListener('click', () => {
+            unlockAch('egg');
+            saveAchs();
+            applyAchUI();
+            $('#eggTarget').textContent = '🎉 Easter Egg Found! Achievement Unlocked!';
+            $('#eggTarget').style.animation = 'none';
+            $('#eggTarget').style.color = '#ffd700';
+        });
+
+        /* ═══════════════════════════════════════════════════════════════
+           MUSEUM GUIDE
+        ═══════════════════════════════════════════════════════════════ */
+        let guideOpen = false, currentEraYear = 1995, guideTimer = null;
+
+        $('#guideBtn').addEventListener('click', () => {
+            guideOpen = !guideOpen;
+            const bubble = $('#guideBubble');
+            if (guideOpen) {
+                showGuide(currentEraYear);
+            } else {
+                bubble.classList.remove('visible');
+            }
+        });
+
+        function showGuide(year) {
+            const text = GUIDE_LINES[year] || GUIDE_LINES[1995];
+            const bubble = $('#guideBubble');
+            bubble.textContent = text;
+            bubble.classList.add('visible');
+            guideOpen = true;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           PREDICTIONS
+        ═══════════════════════════════════════════════════════════════ */
+        const VOTE_KEY = 'itm_votes_v1';
+        let votes = {};
+        try { votes = JSON.parse(localStorage.getItem(VOTE_KEY) || '{}'); } catch (e) { }
+
+        function saveVotes() { try { localStorage.setItem(VOTE_KEY, JSON.stringify(votes)); } catch (e) { } }
+
+        const predGrid = $('#predictionsGrid');
+        if (predGrid) {
+            PREDICTIONS.forEach(p => {
+                const v = votes[p.id] || { yes: 0, no: 0, myVote: null };
+                const el = document.createElement('div');
+                el.className = 'prediction-card reveal';
+                el.innerHTML = `
+      <div class="prediction-icon">${p.icon}</div>
+      <div class="prediction-title">${p.title}</div>
+      <div class="prediction-desc">${p.desc}</div>
+      <div class="vote-row">
+        <button class="vote-btn yes-btn ${v.myVote === 'yes' ? 'voted-yes' : ''}" data-id="${p.id}" data-type="yes">👍 Likely</button>
+        <button class="vote-btn no-btn  ${v.myVote === 'no' ? 'voted-no' : ''}" data-id="${p.id}" data-type="no">👎 Nope</button>
+      </div>
+      <div class="vote-count" id="vc-${p.id}">${v.yes + v.no} votes · ${v.yes} yes</div>
+    `;
+                predGrid.appendChild(el);
+            });
+
+            predGrid.addEventListener('click', e => {
+                const btn = e.target.closest('.vote-btn');
+                if (!btn) return;
+                const id = btn.dataset.id, type = btn.dataset.type;
+                if (!votes[id]) votes[id] = { yes: 0, no: 0, myVote: null };
+                const v = votes[id];
+                if (v.myVote === type) return; // already voted
+                if (v.myVote) v[v.myVote]--; // change vote
+                v[type]++;
+                v.myVote = type;
+                saveVotes();
+                // update UI
+                const card = btn.closest('.prediction-card');
+                card.querySelector('.yes-btn').className = `vote-btn yes-btn ${type === 'yes' ? 'voted-yes' : ''}`;
+                card.querySelector('.no-btn').className = `vote-btn no-btn  ${type === 'no' ? 'voted-no' : ''}`;
+                const vc = card.querySelector(`#vc-${id}`);
+                vc.textContent = `${v.yes + v.no} votes · ${v.yes} yes`;
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DNA ANALYZER
+        ═══════════════════════════════════════════════════════════════ */
+        $$('.dna-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                $$('.dna-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                const result = $('#dnaResult');
+                $('#dnaResultTitle').textContent = `You are a ${btn.dataset.eraPick} Web Person`;
+                $('#dnaResultSub').textContent = btn.dataset.desc;
+                result.classList.add('show');
+            });
+        });
+
+        /* ═══════════════════════════════════════════════════════════════
+           SCROLL LISTENER
+        ═══════════════════════════════════════════════════════════════ */
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        onScroll();
+
+        // Hero stat counter animation
+        (function animateStats() {
+            const targets = [{ el: $('.stat-num'), target: 8, suffix: '' }, { el: $$('.stat-num')[1], target: 35, suffix: '+' }, { el: $$('.stat-num')[2], target: 10, suffix: '' }];
+            targets.forEach(({ el, target, suffix }) => {
+                if (!el) return;
+                let v = 0; const step = () => {
+                    v = Math.min(target, v + Math.ceil(target / 30));
+                    el.textContent = v + suffix;
+                    if (v < target) requestAnimationFrame(step);
+                };
+                setTimeout(step, 500);
+            });
+        })();
+    </script>
+</body>
+
+</html>
